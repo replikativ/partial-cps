@@ -86,3 +86,18 @@
   (and (some? token)
        (identical? token #?(:clj (.get ^ThreadLocal active-trampoline)
                             :cljs @active-trampoline))))
+
+(defn call-in-trampoline
+  "Run `(f token)` as a new trampoline activation on this thread: `token` is
+   the activation's, for `f` to bind as `async/*in-trampoline*` while it
+   forces Thunks. The activation is left however `f` ends.
+
+   An interpreter running untrusted code can expose this instead of
+   `enter-trampoline!` and `leave-trampoline!`: the code then cannot leave an
+   activation unbalanced, nor learn the token of another, and so cannot make a
+   continuation that carries a stale one return its Thunk to no trampoline."
+  [f]
+  (let [[token previous] (enter-trampoline!)]
+    (try
+      (f token)
+      (finally (leave-trampoline! previous)))))

@@ -41,14 +41,13 @@
       returns. For code that starts trampolines of its own; `async` and
       `invoke-continuation` already do."
      [& body]
-     `(let [entered# (runtime/enter-trampoline!)]
-        (try
-          (binding [*in-trampoline* (nth entered# 0)]
-            (loop [result# (do ~@body)]
-              (if (runtime/thunk? result#)
-                (recur (runtime/force-thunk result#))
-                result#)))
-          (finally (runtime/leave-trampoline! (nth entered# 1)))))))
+     `(runtime/call-in-trampoline
+       (fn [token#]
+         (binding [*in-trampoline* token#]
+           (loop [result# (do ~@body)]
+             (if (runtime/thunk? result#)
+               (recur (runtime/force-thunk result#))
+               result#)))))))
 
 (defn invoke-continuation
   "Invoke a CPS continuation, handling Thunk returns via trampoline.
