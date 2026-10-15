@@ -3,7 +3,7 @@
   (:require [clojure.test :refer [deftest testing is run-tests]]
             [is.simm.partial-cps.runtime :as runtime]
             [is.simm.partial-cps.ioc :as ioc]
-            [is.simm.partial-cps.async :refer [await async *in-trampoline*]]))
+            [is.simm.partial-cps.async :as async :refer [await async *in-trampoline*]]))
 
 ;; Test helpers for Clojure (JVM)
 (defn future-delay
@@ -768,3 +768,33 @@
                                            (await (future-delay 5 *path*))))))))
                   2000)]
       (is (= [[0] [1] [2]] result)))))
+
+;; -----------------------------------------------------------------------------
+;; A trampoline activation is balanced
+;; -----------------------------------------------------------------------------
+
+(deftest an-activation-leaves-the-thread-as-it-found-it
+  (let [outside (Object.)]
+    (testing "a normal return, a throw, and nested activations"
+      (async/with-trampoline
+        (let [mine *in-trampoline*]
+          (is (runtime/owns-trampoline? mine))
+          (async/with-trampoline
+            (is (not (runtime/owns-trampoline? mine)) "the inner one runs")
+            (is (runtime/owns-trampoline? *in-trampoline*)))
+          (is (runtime/owns-trampoline? mine) "the outer one runs again")
+          (is (thrown? clojure.lang.ExceptionInfo
+                       (async/with-trampoline (throw (ex-info "inner" {})))))
+          (is (runtime/owns-trampoline? mine) "after a throw too"))))
+    (is (not (runtime/owns-trampoline? outside)))
+    (is (not (async/in-trampoline?)) "no activation is left behind")))
+
+(deftest call-in-trampoline-hands-out-only-its-own-token
+  (async/with-trampoline
+    (let [outer *in-trampoline*
+          seen (runtime/call-in-trampoline
+                (fn [token]
+                  {:fresh? (and (some? token) (not (identical? token outer)))
+                   :owns? (runtime/owns-trampoline? token)}))]
+      (is (= {:fresh? true :owns? true} seen))
+      (is (runtime/owns-trampoline? outer) "the outer activation is restored"))))
