@@ -2,11 +2,16 @@
 
 <p align="center">
 <a href="https://clojurians.slack.com/archives/C09622F337D"><img src="https://badgen.net/badge/-/slack?icon=slack&label"/></a>
-<a href="https://clojars.org/is.simm/partial-cps"><img src="https://img.shields.io/clojars/v/is.simm/partial-cps.svg"/></a>
-<a href="https://circleci.com/gh/simm-is/partial-cps"><img src="https://circleci.com/gh/simm-is/partial-cps.svg?style=shield"/></a>
-<a href="https://github.com/simm-is/partial-cps/tree/main"><img src="https://img.shields.io/github/last-commit/simm-is/partial-cps/main"/></a>
-<a href="https://cljdoc.org/d/is.simm/partial-cps"><img src="https://badgen.net/badge/cljdoc/partial-cps/blue"/></a>
+<a href="https://clojars.org/org.replikativ/partial-cps"><img src="https://img.shields.io/clojars/v/org.replikativ/partial-cps.svg"/></a>
+<a href="https://circleci.com/gh/replikativ/partial-cps"><img src="https://circleci.com/gh/replikativ/partial-cps.svg?style=shield"/></a>
+<a href="https://github.com/replikativ/partial-cps/tree/main"><img src="https://img.shields.io/github/last-commit/replikativ/partial-cps/main"/></a>
+<a href="https://cljdoc.org/d/org.replikativ/partial-cps"><img src="https://badgen.net/badge/cljdoc/partial-cps/blue"/></a>
 </p>
+
+> partial-cps moved here from `simm-is/partial-cps` (the old URL redirects).
+> Releases are now published as `org.replikativ/partial-cps`; those up to
+> 0.1.66 are under `is.simm/partial-cps`. The namespaces stay
+> `is.simm.partial-cps.*`.
 
 A lightweight Clojure/ClojureScript library for [continuation-passing style](https://en.wikipedia.org/wiki/Continuation-passing_style) (CPS) transformations derived from [await-cps](https://github.com/mszajna/await-cps). The CPS transform rewrites code similarly to manual callback rewriting by providing a callback (continuation) to a user specified handler only where necessary (at a user-specified breakpoint). Compared to full CPS which transforms all code expressions, this approach leaves the remaining code synchronous and therefore retains readability compared to the transformations in [pulley](https://github.com/positronic-solutions/pulley.cps), [anglican](https://github.com/probprog/anglican/blob/master/src/anglican/trap.cljc), [core.async](https://github.com/clojure/core.async) or [cloroutine](https://github.com/leonoel/cloroutine). Nonetheless the benefits of CPS transforms are not reduced by the partial approach. The breakpoints and continuations still lend themselves to an effect handling perspective, where different types of effects (or alternatively monads) can be implemented as handlers for specific breakpoints.
 
@@ -27,11 +32,11 @@ The transformed code is also usually faster than more invasive transforms (ANF, 
 
 Add to your dependencies:
 
-[![Clojars Project](http://clojars.org/is.simm/partial-cps/latest-version.svg)](http://clojars.org/is.simm/partial-cps)
+[![Clojars Project](http://clojars.org/org.replikativ/partial-cps/latest-version.svg)](http://clojars.org/org.replikativ/partial-cps)
 
 ```clojure
 ;; deps.edn
-{:deps {is.simm/partial-cps {:mvn/version "LATEST"}}}
+{:deps {org.replikativ/partial-cps {:mvn/version "LATEST"}}}
 ```
 
 ## Usage

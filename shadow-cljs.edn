@@ -14,6 +14,15 @@
    :main is.simm.partial-cps.async-test/run-tests
    :autorun true}
    
+  ;; CI build, compiled by the replikativ/clj-tools orb's tools/build
+  ;; (`npx shadow-cljs compile ci`) and run by tools/cljstest via
+  ;; bin/run-cljstests (`shadow-cljs release ci && node out/ci-tests.js`).
+  :ci
+  {:target :node-test
+   :output-to "out/ci-tests.js"
+   :ns-regexp "-test$"
+   :compiler-options {:elide-asserts false}}
+
   :browser-test
   {:target :browser-test
    :test-dir "target/browser-test"

@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+set -o errexit
+set -o pipefail
+
+echo "Running ClojureScript tests (:ci build)"
+rm out/ci-tests.js 2>/dev/null || true
+npx shadow-cljs release ci
+node out/ci-tests.js
