@@ -1,8 +1,11 @@
 (ns build
   (:require [clojure.tools.build.api :as b]
-            [deps-deploy.deps-deploy :as dd]))
+            [borkdude.gh-release-artifact :as gh]
+            [deps-deploy.deps-deploy :as dd])
+  (:import [clojure.lang ExceptionInfo]))
 
-(def lib 'is.simm/partial-cps)
+(def org "replikativ")
+(def lib 'org.replikativ/partial-cps)
 (def major 0)
 (def minor 1)
 (defn commit-count [] (b/git-count-revs nil))
@@ -23,12 +26,12 @@
                   :version v
                   :basis @basis
                   :src-dirs ["src" "src-core-async"]
-                  :scm {:url "https://github.com/simm-is/partial-cps"
-                        :connection "scm:git:git://github.com/simm-is/partial-cps.git"
-                        :developerConnection "scm:git:ssh://git@github.com/simm-is/partial-cps.git"
-                        :tag (b/git-process {:git-args "rev-parse HEAD"})}
+                  :scm {:url "https://github.com/replikativ/partial-cps"
+                        :connection "scm:git:git://github.com/replikativ/partial-cps.git"
+                        :developerConnection "scm:git:ssh://git@github.com/replikativ/partial-cps.git"
+                        :tag (str "v" v)}
                   :pom-data [[:description "Lightweight Clojure/ClojureScript library for partial continuation-passing style transformations."]
-                             [:url "https://github.com/simm-is/partial-cps"]
+                             [:url "https://github.com/replikativ/partial-cps"]
                              [:licenses
                               [:license
                                [:name "Eclipse Public License"]
@@ -54,3 +57,46 @@
               :jar-file (jar-file)
               :class-dir class-dir})
   (println "Installed to local Maven repo"))
+
+;; ---------------------------------------------------------------------------
+;; GitHub release (borkdude/gh-release-artifact), as spindel does: the JAR as
+;; an asset of the release at tag vX.Y.Z, retried with a Fibonacci backoff.
+;; ---------------------------------------------------------------------------
+
+(defn fib [a b]
+  (lazy-seq (cons a (fib b (+ a b)))))
+
+(defn retry-with-fib-backoff [retries exec-fn test-fn]
+  (loop [idle-times (take retries (fib 1 2))]
+    (let [result (exec-fn)]
+      (if (test-fn result)
+        (do (println "Returned: " result)
+            (if-let [sleep-ms (first idle-times)]
+              (do (println "Retrying with remaining back-off times (in s): " idle-times)
+                  (Thread/sleep (* 1000 sleep-ms))
+                  (recur (rest idle-times)))
+              result))
+        result))))
+
+(defn try-release []
+  (try (gh/overwrite-asset {:org org
+                            :repo (name lib)
+                            :tag (str "v" (version))
+                            :commit (b/git-process {:git-args "rev-parse HEAD"})
+                            :file (jar-file)
+                            :content-type "application/java-archive"
+                            :draft false})
+       (catch ExceptionInfo e
+         (assoc (ex-data e) :failure? true))))
+
+(defn release
+  "Create a GitHub release at tag vX.Y.Z and upload the built JAR as an
+   asset. Requires GITHUB_TOKEN env var."
+  [_]
+  (jar nil)
+  (println "Trying to release artifact at tag v" (version))
+  (let [ret (retry-with-fib-backoff 10 try-release :failure?)]
+    (if (:failure? ret)
+      (do (println "GitHub release failed!")
+          (System/exit 1))
+      (println (:url ret)))))

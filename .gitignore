@@ -32,6 +32,6 @@
 /examples
 
 .shadow-cljs
-package-lock.json
+/out
 repl-mcp.log
 node_modules/

@@ -7,8 +7,15 @@
  :deps {org.clojure/clojure {:mvn/version "1.12.0"}}
  :aliases
  {:build {:deps {io.github.clojure/tools.build {:mvn/version "0.10.5"}
-                 slipset/deps-deploy {:mvn/version "0.2.2"}}
+                 slipset/deps-deploy {:mvn/version "0.2.2"}
+                 io.github.borkdude/gh-release-artifact {:git/sha "b946558225a7839f6a0f644834e838e190dc2262"}
+                 babashka/babashka.curl {:mvn/version "0.1.2"}
+                 babashka/fs {:mvn/version "0.3.17"}
+                 cheshire/cheshire {:mvn/version "5.11.0"}}
           :ns-default build}
+
+  ;; resolved by CI's setup (`clojure -P -A:dev:test:build`)
+  :dev {:extra-paths ["test"]}
 
   ;; core.async present → lets partial-cps compile/test the optional adapter ns.
   :core-async {:extra-deps {org.clojure/core.async {:mvn/version "1.6.681"}}}
