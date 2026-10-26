@@ -384,11 +384,16 @@
             (let [recur-target (gensym "recur")
                   updated-ctx (add-env-syms ctx bind-names)]
               `(letfn [(~recur-target [~@bind-names]
-                         (loop [~@(interleave bind-names bind-names)]
-                           ~(invert-impl (assoc updated-ctx
-                                                :sync-recur? true
-                                                :recur-target recur-target)
-                                         `(do ~@body))))]
+                         ;; A recur Thunk runs after the original lexical try
+                         ;; has returned. Route throws through the handler at
+                         ;; the LOOP target, not a resumed await's inner catch.
+                         (try
+                           (loop [~@(interleave bind-names bind-names)]
+                             ~(invert-impl (assoc updated-ctx
+                                                  :sync-recur? true
+                                                  :recur-target recur-target)
+                                           `(do ~@body)))
+                           (catch ~all-ex error# (~e error#))))]
                  (let [~@binds] (~recur-target ~@bind-names))))
 
             :else `(~r ~form)))
