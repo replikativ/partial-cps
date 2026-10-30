@@ -70,8 +70,11 @@
         (with-trampoline result))
       result)))
 
-(defn await-handler
+(defn ^:is.simm.partial-cps.ioc/eager-arguments await-handler
   "Provides effect handler code for await.
+
+  :is.simm.partial-cps.ioc/eager-arguments opts this function-style handler
+  into argument evaluation before registered scope data is captured.
 
   Receives ctx map containing:
   - :env - macro expansion environment (&env)

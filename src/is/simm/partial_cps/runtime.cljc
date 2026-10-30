@@ -13,12 +13,46 @@
      ;; no dynamic binding support for async code in cljs (same for core.async)
      :cljs identity))
 
+(def ^:dynamic ^:no-doc *scope-frame*
+  "Embedder-provided lexical scope descriptors; never a thread binding frame."
+  nil)
+
+(defn- capture-scope [frame]
+  (mapv (fn [[_ [capture restore bind-value]]]
+          [restore bind-value (capture)]) frame))
+
+(defn- call-in-scope [frame captured f]
+  ;; Resolve every value in the runner's context before pushing bindings.
+  (let [values (mapv (fn [[restore bind-value value]] [bind-value (restore value)]) captured)]
+    (binding [*scope-frame* frame]
+      (letfn [(run [i]
+                (if (< i (count values))
+                  (let [[bind-value value] (nth values i)]
+                    (bind-value value #(run (inc i))))
+                  (f)))]
+        (run 0)))))
+
+(defn ^:no-doc scope-continuation
+  "Capture registered embedder scope data for a continuation. The runner
+  supplies execution authority; adapters restore only their lexical scope."
+  [k]
+  (if (seq *scope-frame*)
+    (let [frame *scope-frame* captured (capture-scope frame)]
+      (fn [value] (call-in-scope frame captured #(k value))))
+    k))
+
+(defn- scope-thunk [f]
+  (if (seq *scope-frame*)
+    (let [frame *scope-frame* captured (capture-scope frame)]
+      (fn [] (call-in-scope frame captured f)))
+    f))
+
 (deftype Thunk [f])
 
 (defn ->thunk
   "Create a thunk for trampolining"
   [f]
-  (Thunk. f))
+  (Thunk. (scope-thunk f)))
 
 (defn thunk?
   "Whether `x` is a trampoline Thunk.
