@@ -2,7 +2,8 @@
   (:refer-clojure :exclude [first rest sequence transduce into])
   (:require [cljs.test :as test :refer-macros [deftest testing is]]
             [is.simm.partial-cps.sequence :as seq]
-            [is.simm.partial-cps.async :refer [await]])
+            [is.simm.partial-cps.async :refer [await]]
+            [is.simm.partial-cps.test-helpers :refer [complete-test!]])
   (:require-macros [is.simm.partial-cps.async :refer [async]]))
 
 ;; Test helpers for ClojureScript
@@ -58,10 +59,10 @@
                     [first-val second-val third-val]))
                  (fn [result]
                    (is (= [1 2 3] result))
-                   (done))
+                   (complete-test! done))
                  (fn [error]
                    (is false (str "Should not fail: " error))
-                   (done))))))
+                   (complete-test! done))))))
 
 (deftest test-empty-async-seq
   (test/async done
@@ -72,10 +73,10 @@
                     [first-val rest-val]))
                  (fn [result]
                    (is (= [nil nil] result))
-                   (done))
+                   (complete-test! done))
                  (fn [error]
                    (is false (str "Should not fail: " error))
-                   (done))))))
+                   (complete-test! done))))))
 
 (deftest test-single-element-seq
   (test/async done
@@ -87,10 +88,10 @@
                     [first-val (some? rest-seq) rest-first]))
                  (fn [result]
                    (is (= [:only false nil] result))
-                   (done))
+                   (complete-test! done))
                  (fn [error]
                    (is false (str "Should not fail: " error))
-                   (done))))))
+                   (complete-test! done))))))
 
 ;; Transduce Tests
 (deftest test-transduce-basic-map
@@ -100,10 +101,10 @@
                   (await (seq/transduce (map #(* % 10)) + 0 async-seq)))
                  (fn [result]
                    (is (= 150 result))  ; [10 20 30 40 50] sum = 150
-                   (done))
+                   (complete-test! done))
                  (fn [error]
                    (is false (str "Should not fail: " error))
-                   (done))))))
+                   (complete-test! done))))))
 
 (deftest test-transduce-filter
   (test/async done
@@ -112,10 +113,10 @@
                   (await (seq/transduce (filter even?) conj [] async-seq)))
                  (fn [result]
                    (is (= [2 4 6 8 10] result))
-                   (done))
+                   (complete-test! done))
                  (fn [error]
                    (is false (str "Should not fail: " error))
-                   (done))))))
+                   (complete-test! done))))))
 
 (deftest test-transduce-composed
   (test/async done
@@ -127,10 +128,10 @@
                                         conj [] async-seq)))
                  (fn [result]
                    (is (= [20 40 60] result))
-                   (done))
+                   (complete-test! done))
                  (fn [error]
                    (is false (str "Should not fail: " error))
-                   (done))))))
+                   (complete-test! done))))))
 
 (deftest test-transduce-partition-all
   (test/async done
@@ -139,10 +140,10 @@
                   (await (seq/transduce (partition-all 3) conj [] async-seq)))
                  (fn [result]
                    (is (= [[1 2 3] [4 5 6] [7]] result))
-                   (done))
+                   (complete-test! done))
                  (fn [error]
                    (is false (str "Should not fail: " error))
-                   (done))))))
+                   (complete-test! done))))))
 
 (deftest test-transduce-with-early-termination
   (test/async done
@@ -151,10 +152,10 @@
                   (await (seq/transduce (take 4) conj [] async-seq)))
                  (fn [result]
                    (is (= [1 2 3 4] result))
-                   (done))
+                   (complete-test! done))
                  (fn [error]
                    (is false (str "Should not fail: " error))
-                   (done))))))
+                   (complete-test! done))))))
 
 (deftest test-transduce-empty-seq
   (test/async done
@@ -163,10 +164,10 @@
                   (await (seq/transduce (map inc) + 42 empty-seq)))
                  (fn [result]
                    (is (= 42 result))  ; Should return init value
-                   (done))
+                   (complete-test! done))
                  (fn [error]
                    (is false (str "Should not fail: " error))
-                   (done))))))
+                   (complete-test! done))))))
 
 ;; Into Tests
 (deftest test-into-basic
@@ -176,10 +177,10 @@
                   (await (seq/into [] async-seq)))
                  (fn [result]
                    (is (= [1 2 3 4 5] result))
-                   (done))
+                   (complete-test! done))
                  (fn [error]
                    (is false (str "Should not fail: " error))
-                   (done))))))
+                   (complete-test! done))))))
 
 (deftest test-into-with-transducer
   (test/async done
@@ -188,10 +189,10 @@
                   (await (seq/into [] (map #(* % %)) async-seq)))
                  (fn [result]
                    (is (= [1 4 9 16 25] result))
-                   (done))
+                   (complete-test! done))
                  (fn [error]
                    (is false (str "Should not fail: " error))
-                   (done))))))
+                   (complete-test! done))))))
 
 (deftest test-into-set
   (test/async done
@@ -200,10 +201,10 @@
                   (await (seq/into #{} async-seq)))
                  (fn [result]
                    (is (= #{1 2 3} result))
-                   (done))
+                   (complete-test! done))
                  (fn [error]
                    (is false (str "Should not fail: " error))
-                   (done))))))
+                   (complete-test! done))))))
 
 ;; Sequence (lazy transformation) Tests
 (deftest test-sequence-basic-map
@@ -217,10 +218,10 @@
                     [first-val second-val]))
                  (fn [result]
                    (is (= [10 20] result))
-                   (done))
+                   (complete-test! done))
                  (fn [error]
                    (is false (str "Should not fail: " error))
-                   (done))))))
+                   (complete-test! done))))))
 
 (deftest test-sequence-filter
   (test/async done
@@ -236,10 +237,10 @@
                     [first-val second-val third-val]))
                  (fn [result]
                    (is (= [2 4 6] result))
-                   (done))
+                   (complete-test! done))
                  (fn [error]
                    (is false (str "Should not fail: " error))
-                   (done))))))
+                   (complete-test! done))))))
 
 (deftest test-sequence-partition-all
   (test/async done
@@ -254,10 +255,10 @@
                     [first-partition second-partition third-partition]))
                  (fn [result]
                    (is (= [[1 2 3] [4 5 6] [7]] result))
-                   (done))
+                   (complete-test! done))
                  (fn [error]
                    (is false (str "Should not fail: " error))
-                   (done))))))
+                   (complete-test! done))))))
 
 (deftest test-sequence-composed-transducers
   (test/async done
@@ -270,10 +271,10 @@
                   (await (seq/into [] transformed-seq)))
                  (fn [result]
                    (is (= [20 40 60] result))
-                   (done))
+                   (complete-test! done))
                  (fn [error]
                    (is false (str "Should not fail: " error))
-                   (done))))))
+                   (complete-test! done))))))
 
 (deftest test-sequence-empty-result-transduce
   (test/async done
@@ -283,10 +284,10 @@
                   (await (seq/transduce (filter even?) conj [] async-seq)))
                  (fn [result]
                    (is (= [] result))
-                   (done))
+                   (complete-test! done))
                  (fn [error]
                    (is false (str "Should not fail: " error))
-                   (done))))))
+                   (complete-test! done))))))
 
 ;; Lazy Evaluation Tests
 (deftest test-lazy-evaluation-basic
@@ -299,10 +300,10 @@
                    (is (= 2 result))
          ;; Should have processed exactly 2 elements (1 and 2)
                    (is (= 2 @(.-processed_count slow-seq)))
-                   (done))
+                   (complete-test! done))
                  (fn [error]
                    (is false (str "Should not fail: " error))
-                   (done))))))
+                   (complete-test! done))))))
 
 (deftest test-lazy-evaluation-with-take
   (test/async done
@@ -314,10 +315,10 @@
                    (is (= [1 2 3] result))
          ;; Should have processed exactly 3 elements due to take
                    (is (= 3 @(.-processed_count slow-seq)))
-                   (done))
+                   (complete-test! done))
                  (fn [error]
                    (is false (str "Should not fail: " error))
-                   (done))))))
+                   (complete-test! done))))))
 
 (deftest test-lazy-evaluation-filter-early-stop
   (test/async done
@@ -331,10 +332,10 @@
                    (is (= [2 4] result))
          ;; Should have processed 1,2,3,4 to get 2 even numbers
                    (is (= 4 @(.-processed_count slow-seq)))
-                   (done))
+                   (complete-test! done))
                  (fn [error]
                    (is false (str "Should not fail: " error))
-                   (done))))))
+                   (complete-test! done))))))
 
 ;; Error Handling Tests
 (deftest test-sequence-with-error-in-source
@@ -346,10 +347,10 @@
                   (await (seq/first failing-seq)))
                  (fn [result]
                    (is false "Should not succeed")
-                   (done))
+                   (complete-test! done))
                  (fn [error]
                    (is (= "Source error" (.-message error)))
-                   (done))))))
+                   (complete-test! done))))))
 
 ;; Performance and Edge Cases
 (deftest test-large-sequence-performance
@@ -360,10 +361,10 @@
                   (await (seq/transduce (take 5) conj [] large-seq)))
                  (fn [result]
                    (is (= [0 1 2 3 4] result))
-                   (done))
+                   (complete-test! done))
                  (fn [error]
                    (is false (str "Should not fail: " error))
-                   (done))))))
+                   (complete-test! done))))))
 
 (deftest test-nil-sequence-handling
   (testing "Nil sequence handling"
@@ -383,10 +384,10 @@
                     [first-inner-val second-inner-val]))
                  (fn [result]
                    (is (= [1 10] result))
-                   (done))
+                   (complete-test! done))
                  (fn [error]
                    (is false (str "Should not fail: " error))
-                   (done))))))
+                   (complete-test! done))))))
 
 ;; Test runner
 (defn ^:export run-sequence-tests []

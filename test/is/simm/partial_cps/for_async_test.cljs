@@ -1,7 +1,8 @@
 (ns is.simm.partial-cps.for-async-test
   (:require [cljs.test :as test :refer-macros [deftest testing is]]
             [is.simm.partial-cps.sequence :as seq]
-            [is.simm.partial-cps.async :refer [await]])
+            [is.simm.partial-cps.async :refer [await]]
+            [is.simm.partial-cps.test-helpers :refer [complete-test!]])
   (:require-macros [is.simm.partial-cps.async :refer [async]]
                    [is.simm.partial-cps.sequence :refer [for for-with]]))
 
@@ -23,8 +24,8 @@
                     (if-let [[v rest-s] (await (seq/anext s))]
                       (recur rest-s (conj acc v))
                       (is (= [2 4 6] acc))))))
-               (fn [_v] (done))
-               (fn [err] (is false (str "Unexpected error: " err)) (done)))))
+               (fn [_v] (complete-test! done))
+               (fn [err] (is false (str "Unexpected error: " err)) (complete-test! done)))))
 
 (deftest test-for-with-await
   (test/async done
@@ -36,8 +37,8 @@
                     (if-let [[v rest-s] (await (seq/anext s))]
                       (recur rest-s (conj acc v))
                       (is (= [2 4 6] acc))))))
-               (fn [_v] (done))
-               (fn [err] (is false (str "Unexpected error: " err)) (done)))))
+               (fn [_v] (complete-test! done))
+               (fn [err] (is false (str "Unexpected error: " err)) (complete-test! done)))))
 
 (deftest test-for-empty-seq
   (test/async done
@@ -47,8 +48,8 @@
                   (if-let [[v _] (await (seq/anext aseq))]
                     (is false "Should be empty")
                     (is true "Empty sequence works"))))
-               (fn [_v] (done))
-               (fn [err] (is false (str "Unexpected error: " err)) (done)))))
+               (fn [_v] (complete-test! done))
+               (fn [err] (is false (str "Unexpected error: " err)) (complete-test! done)))))
 
 ;; Modifier tests
 
@@ -63,8 +64,8 @@
                     (if-let [[v rest-s] (await (seq/anext s))]
                       (recur rest-s (conj acc v))
                       (is (= [0 2 4 6 8] acc))))))
-               (fn [_v] (done))
-               (fn [err] (is false (str "Unexpected error: " err)) (done)))))
+               (fn [_v] (complete-test! done))
+               (fn [err] (is false (str "Unexpected error: " err)) (complete-test! done)))))
 
 (deftest test-for-let-modifier
   (test/async done
@@ -78,8 +79,8 @@
                     (if-let [[v rest-s] (await (seq/anext s))]
                       (recur rest-s (conj acc v))
                       (is (= [[1 2 3] [2 4 5] [3 6 7]] acc))))))
-               (fn [_v] (done))
-               (fn [err] (is false (str "Unexpected error: " err)) (done)))))
+               (fn [_v] (complete-test! done))
+               (fn [err] (is false (str "Unexpected error: " err)) (complete-test! done)))))
 
 (deftest test-for-while-modifier
   (test/async done
@@ -92,8 +93,8 @@
                     (if-let [[v rest-s] (await (seq/anext s))]
                       (recur rest-s (conj acc v))
                       (is (= [0 1 2 3 4] acc))))))
-               (fn [_v] (done))
-               (fn [err] (is false (str "Unexpected error: " err)) (done)))))
+               (fn [_v] (complete-test! done))
+               (fn [err] (is false (str "Unexpected error: " err)) (complete-test! done)))))
 
 ;; Multiple bindings tests
 
@@ -108,8 +109,8 @@
                     (if-let [[v rest-s] (await (seq/anext s))]
                       (recur rest-s (conj acc v))
                       (is (= [[1 :a] [1 :b] [2 :a] [2 :b]] acc))))))
-               (fn [_v] (done))
-               (fn [err] (is false (str "Unexpected error: " err)) (done)))))
+               (fn [_v] (complete-test! done))
+               (fn [err] (is false (str "Unexpected error: " err)) (complete-test! done)))))
 
 (deftest test-for-two-bindings-with-modifiers
   (test/async done
@@ -124,8 +125,8 @@
                     (if-let [[v rest-s] (await (seq/anext s))]
                       (recur rest-s (conj acc v))
                       (is (= [[1 :a] [1 :c] [3 :a] [3 :c]] acc))))))
-               (fn [_v] (done))
-               (fn [err] (is false (str "Unexpected error: " err)) (done)))))
+               (fn [_v] (complete-test! done))
+               (fn [err] (is false (str "Unexpected error: " err)) (complete-test! done)))))
 
 (deftest test-for-three-bindings
   (test/async done
@@ -141,8 +142,8 @@
                       (is (= [[1 :a :x] [1 :a :y] [1 :b :x] [1 :b :y]
                               [2 :a :x] [2 :a :y] [2 :b :x] [2 :b :y]]
                              acc))))))
-               (fn [_v] (done))
-               (fn [err] (is false (str "Unexpected error: " err)) (done)))))
+               (fn [_v] (complete-test! done))
+               (fn [err] (is false (str "Unexpected error: " err)) (complete-test! done)))))
 
 ;; Await in various positions
 
@@ -158,8 +159,8 @@
                     (if-let [[v rest-s] (await (seq/anext s))]
                       (recur rest-s (conj acc v))
                       (is (= [1 3 5] acc))))))
-               (fn [_v] (done))
-               (fn [err] (is false (str "Unexpected error: " err)) (done)))))
+               (fn [_v] (complete-test! done))
+               (fn [err] (is false (str "Unexpected error: " err)) (complete-test! done)))))
 
 (deftest test-for-await-in-sequence-expr
   (test/async done
@@ -173,8 +174,8 @@
                     (if-let [[v rest-s] (await (seq/anext s))]
                       (recur rest-s (conj acc v))
                       (is (= [0 20 40] acc))))))
-               (fn [_v] (done))
-               (fn [err] (is false (str "Unexpected error: " err)) (done)))))
+               (fn [_v] (complete-test! done))
+               (fn [err] (is false (str "Unexpected error: " err)) (complete-test! done)))))
 
 ;; Immutability tests
 
@@ -187,8 +188,8 @@
                       rest-seq (await (seq/rest aseq))
                       rest-first (await (seq/first rest-seq))]
                   (is (= [10 10 20] [first-val second-val rest-first]))))
-               (fn [_v] (done))
-               (fn [err] (is false (str "Unexpected error: " err)) (done)))))
+               (fn [_v] (complete-test! done))
+               (fn [err] (is false (str "Unexpected error: " err)) (complete-test! done)))))
 
 (deftest test-for-independent-consumption
   (test/async done
@@ -203,8 +204,8 @@
                                     (recur rest-s (conj acc v))
                                     acc))]
                   (is (= [[2 4 6] [2 4 6]] [consumer1 consumer2]))))
-               (fn [_v] (done))
-               (fn [err] (is false (str "Unexpected error: " err)) (done)))))
+               (fn [_v] (complete-test! done))
+               (fn [err] (is false (str "Unexpected error: " err)) (complete-test! done)))))
 
 ;; for-with tests
 
@@ -234,8 +235,8 @@
                     (if-let [[v rest-s] (await (seq/anext s))]
                       (recur rest-s (conj acc v))
                       (is (= [2 4 6] acc))))))
-               (fn [_v] (done))
-               (fn [err] (is false (str "Unexpected error: " err)) (done)))))
+               (fn [_v] (complete-test! done))
+               (fn [err] (is false (str "Unexpected error: " err)) (complete-test! done)))))
 
 ;; Test runner
 (defn run-tests []
