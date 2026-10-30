@@ -134,8 +134,8 @@
   ;; that macros don't depend on the values in the &env map.
   (update ctx :env (fnil into {}) (map (fn [sym] [sym true])) syms))
 
-(defonce ^{:doc "Macro-time registry: fully qualified var symbol -> fully qualified
-  symbol of a function `(restorer saved current)`. See
+(defonce ^{:doc "Macro-time registry: fully qualified var symbol -> restorer and
+  optional entry capture symbols. See
   `register-binding-restorer!`."}
   binding-restorers
   (atom {}))
@@ -155,11 +155,20 @@
   a form that meant to switch the var to something else entirely (then
   `saved` is still right).
 
-  Both arguments are fully qualified symbols; call this before the forms
+  With `capture-sym`, `(capture saved)` runs once at lexical binding entry,
+  after all outer var values are saved and before any binding initializer
+  runs. Its result replaces `saved` in later restorer calls. This entry
+  capture is independent of registered binding-scope capture on suspension.
+  These hooks apply only to binding forms whose bodies contain CPS
+  breakpoints; other binding forms retain ordinary binding semantics.
+
+  All arguments are fully qualified symbols; call this before the forms
   that bind the var are macro-expanded."
-  [var-sym restorer-sym]
-  (swap! binding-restorers assoc var-sym restorer-sym)
-  nil)
+  ([var-sym restorer-sym]
+   (register-binding-restorer! var-sym restorer-sym nil))
+  ([var-sym restorer-sym capture-sym]
+   (swap! binding-restorers assoc var-sym {:restorer restorer-sym :capture capture-sym})
+   nil))
 
 (defonce ^{:doc "Macro-time scope adapters for embedder-owned binding values."}
   binding-scopes (atom {}))
@@ -236,6 +245,10 @@
         var-syms (map first binding-pairs)
         ;; Generate symbols to save current values
         saved-syms (map #(gensym (str (name %) "-saved__")) var-syms)
+        restorers (map #(get @binding-restorers (var-name env %)) var-syms)
+        captured-syms (map (fn [saved {:keys [capture]}]
+                             (if capture (gensym "binding-captured__") saved))
+                           saved-syms restorers)
         ;; Generate wrapped continuation symbols
         wrapped-r (gensym "binding-restore-r__")
         wrapped-e (gensym "binding-restore-e__")
@@ -251,11 +264,11 @@
         descriptors (into {} (map (fn [[v adapter]]
                                     [(list 'quote (var-name env v)) (scope-descriptor v adapter)]) scoped))
         ;; what each var is restored to (see `register-binding-restorer!`)
-        restored (map (fn [var-sym saved entered]
-                        (if-let [restorer (get @binding-restorers (var-name env var-sym))]
+        restored (map (fn [var-sym saved entered {:keys [restorer]}]
+                        (if restorer
                           `(~restorer ~saved ~var-sym ~entered)
                           saved))
-                      var-syms saved-syms entered-syms)]
+                      var-syms captured-syms entered-syms restorers)]
     (if (has-breakpoints? `(do ~@body) ctx)
       ;; Body has breakpoints - need to wrap continuations.
       ;; IMPORTANT: Do NOT macro-expand the binding form into push/pop-thread-bindings
@@ -266,6 +279,9 @@
       ;; scope exits normally. Continuations fire outside this scope; wrapped-r/wrapped-e
       ;; restore outer binding values.
       `(let [~@(interleave saved-syms var-syms)
+             ~@(mapcat (fn [saved captured {:keys [capture]}]
+                         (when capture [captured `(~capture ~saved)]))
+                       saved-syms captured-syms restorers)
              ~@(interleave entered-syms (map second binding-pairs))
              ~@(when (seq scoped)
                  [frame `(merge is.simm.partial-cps.runtime/*scope-frame* ~descriptors)])

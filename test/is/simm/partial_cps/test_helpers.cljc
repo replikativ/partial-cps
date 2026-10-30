@@ -65,6 +65,12 @@
 ;; Cross-Platform Test Async Macro
 ;; =============================================================================
 
+(defn complete-test!
+  "Complete after the CPS trampoline unwinds, before the runner starts another test."
+  [done]
+  #?(:clj (done)
+     :cljs (js/setTimeout done 0)))
+
 #?(:clj
    (defmacro test-async
      "Cross-platform async test that runs a partial-cps async block and asserts the result.
@@ -91,10 +97,10 @@
                           (~async-expr
                            (fn [result#]
                              (cljs.test/is (= ~expected result#))
-                             (done#))
+                             (complete-test! done#))
                            (fn [err#]
                              (cljs.test/is false (str "Unexpected error: " err#))
-                             (done#))))
+                             (complete-test! done#))))
         ;; CLJ - use promise-based blocking
         `(let [result# (promise)
                error# (promise)]
@@ -137,14 +143,14 @@
                             (~async-expr
                              (fn [result#]
                                (cljs.test/is false (str "Expected error, got: " result#))
-                               (done#))
+                               (complete-test! done#))
                              (fn [~err-sym]
                                (cljs.test/is true "Got expected error")
                                ~(when error-pattern
                                   `(cljs.test/is (clojure.string/includes?
                                                   (or (.-message ~err-sym) (str ~err-sym))
                                                   ~error-pattern)))
-                               (done#))))
+                               (complete-test! done#))))
           ;; CLJ
           `(let [result# (promise)
                  error# (promise)]
@@ -187,10 +193,10 @@
                           (~async-expr
                            (fn [result#]
                              (~assert-fn result#)
-                             (done#))
+                             (complete-test! done#))
                            (fn [err#]
                              (cljs.test/is false (str "Unexpected error: " err#))
-                             (done#))))
+                             (complete-test! done#))))
         ;; CLJ
         `(let [result# (promise)
                error# (promise)]

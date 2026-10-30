@@ -1,6 +1,7 @@
 (ns is.simm.partial-cps.async-test
   (:require [cljs.test :as test :refer-macros [deftest testing is]]
             [is.simm.partial-cps.async :refer [await]]
+            [is.simm.partial-cps.test-helpers :refer [complete-test!]]
             [clojure.pprint :refer [pprint]]
             [is.simm.partial-cps.sequence-test :as sequence]
             [is.simm.partial-cps.for-async-test :as for-async]
@@ -29,8 +30,8 @@
   (test/async done
               ((async
                 (is (= "hello" (await (async-cb-delay 10 "hello")))))
-               (fn [_v] (done))
-               (fn [err] (is false (str "Unexpected error: " err)) (done)))))
+               (fn [_v] (complete-test! done))
+               (fn [err] (is false (str "Unexpected error: " err)) (complete-test! done)))))
 
 (deftest test-multiple-awaits
   (test/async done
@@ -39,8 +40,8 @@
                       b (await (async-cb-delay 10 2))
                       c (await (async-cb-delay 10 3))]
                   (is (= [1 2 3] [a b c]))))
-               (fn [_v] (done))
-               (fn [err] (is false (str "Unexpected error: " err)) (done)))))
+               (fn [_v] (complete-test! done))
+               (fn [err] (is false (str "Unexpected error: " err)) (complete-test! done)))))
 
 (deftest test-await-in-conditional
   (test/async done
@@ -49,8 +50,8 @@
                                (await (async-cb-delay 10 "true-branch"))
                                (await (async-cb-delay 10 "false-branch")))]
                   (is (= "true-branch" result))))
-               (fn [_v] (done))
-               (fn [err] (is false (str "Unexpected error: " err)) (done)))))
+               (fn [_v] (complete-test! done))
+               (fn [err] (is false (str "Unexpected error: " err)) (complete-test! done)))))
 
 (deftest test-cond-expansion
   (test/async done
@@ -62,8 +63,8 @@
                     (await (async-cb-delay 10 false)) (swap! result conj :third-branch)
                     :else (swap! result conj :fourth-branch))
                   (is (= [:first-branch] @result))))
-               (fn [_v] (done))
-               (fn [err] (is false (str "Unexpected error: " err)) (done)))))
+               (fn [_v] (complete-test! done))
+               (fn [err] (is false (str "Unexpected error: " err)) (complete-test! done)))))
 
 (deftest test-await-in-let-binding
   (test/async done
@@ -72,8 +73,8 @@
                       y (* x 2)
                       z (await (async-cb-delay 10 y))]
                   (is (= [5 10 10] [x y z]))))
-               (fn [_v] (done))
-               (fn [err] (is false (str "Unexpected error: " err)) (done)))))
+               (fn [_v] (complete-test! done))
+               (fn [err] (is false (str "Unexpected error: " err)) (complete-test! done)))))
 
 ;; Error handling tests
 (deftest test-error-handling
@@ -84,8 +85,8 @@
                   (is false "Should have failed")
                   (catch :default err
                     (is (= "Test error" (.-message err))))))
-               (fn [_v] (done))
-               (fn [err] (is false (str "Unexpected error: " err)) (done)))))
+               (fn [_v] (complete-test! done))
+               (fn [err] (is false (str "Unexpected error: " err)) (complete-test! done)))))
 
 (deftest test-try-catch-in-async
   (test/async done
@@ -96,8 +97,8 @@
                                (catch :default e
                                  (.-message e)))]
                   (is (= "Caught error" result))))
-               (fn [_v] (done))
-               (fn [err] (is false (str "Unexpected error: " err)) (done)))))
+               (fn [_v] (complete-test! done))
+               (fn [err] (is false (str "Unexpected error: " err)) (complete-test! done)))))
 
 ;; Loop and recur tests
 (deftest test-loop-with-await
@@ -110,8 +111,8 @@
                                     (recur (inc i) (conj acc value)))
                                   acc))]
                   (is (= (vec (range 2000)) results))))
-               (fn [_v] (done))
-               (fn [err] (is false (str "Unexpected error: " err)) (done)))))
+               (fn [_v] (complete-test! done))
+               (fn [err] (is false (str "Unexpected error: " err)) (complete-test! done)))))
 
 ;; Nested async functions
 (deftest test-nested-async-functions
@@ -122,8 +123,8 @@
                                      (* x 2)))
                       result (await inner-async)]
                   (is (= 10 result))))
-               (fn [_v] (done))
-               (fn [err] (is false (str "Unexpected error: " err)) (done)))))
+               (fn [_v] (complete-test! done))
+               (fn [err] (is false (str "Unexpected error: " err)) (complete-test! done)))))
 
 ;; Complex control flow
 (deftest test-complex-control-flow
@@ -139,8 +140,8 @@
                           (swap! result conj (await (async-cb-delay 10 3)))
                           (swap! result conj :else)))))
                   (is (= [1 2 3] @result))))
-               (fn [_v] (done))
-               (fn [err] (is false (str "Unexpected error: " err)) (done)))))
+               (fn [_v] (complete-test! done))
+               (fn [err] (is false (str "Unexpected error: " err)) (complete-test! done)))))
 
 ;; Promise interop test
 (deftest test-promise-interop
@@ -151,8 +152,8 @@
                                             resolve
                                             reject)))]
                   (is (= "from-promise" value))))
-               (fn [_v] (done))
-               (fn [err] (is false (str "Unexpected error: " err)) (done)))))
+               (fn [_v] (complete-test! done))
+               (fn [err] (is false (str "Unexpected error: " err)) (complete-test! done)))))
 
 ;; Test runner
 (defn ^:export run-tests []

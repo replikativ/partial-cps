@@ -6,4 +6,10 @@ set -o pipefail
 echo "Running ClojureScript tests (:ci build)"
 rm out/ci-tests.js 2>/dev/null || true
 npx shadow-cljs release ci
-node out/ci-tests.js
+cljs_test_output=$(mktemp)
+trap 'rm -f "$cljs_test_output"' EXIT
+node out/ci-tests.js | tee "$cljs_test_output"
+if ! grep -Eq '^Ran [1-9][0-9]* tests containing [1-9][0-9]* assertions\.$' "$cljs_test_output"; then
+  echo "ClojureScript tests exited without a completed test summary." >&2
+  exit 1
+fi
