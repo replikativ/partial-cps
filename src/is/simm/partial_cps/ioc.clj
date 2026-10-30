@@ -161,7 +161,26 @@
   (swap! binding-restorers assoc var-sym restorer-sym)
   nil)
 
-(defn- restoring-continuation
+(defonce ^{:doc "Macro-time scope adapters for embedder-owned binding values."}
+  binding-scopes (atom {}))
+
+(defn register-binding-scope!
+  "Carry an embedder-owned lexical scope through trampoline bounces.
+  capture is unary; restore receives captured data and the runner's current value.
+  Register qualified symbols before compiling forms that bind var-sym.
+  Restore receives the actual runner value, so captured lexical data need not
+  capture execution authority."
+  [var-sym capture-sym restore-sym]
+  (swap! binding-scopes assoc var-sym {:capture capture-sym :restore restore-sym})
+  nil)
+
+(defn- scope-descriptor [var-sym {:keys [capture restore]}]
+  (let [state (gensym "state") value (gensym "value") f (gensym "f")]
+    `[(fn [] (~capture ~var-sym))
+      (fn [~state] (~restore ~state ~var-sym))
+      (fn [~value ~f] (~'binding [~var-sym ~value] (~f)))]))
+
+(defn- legacy-restoring-continuation
   "The code of a continuation that calls `k` with the vars restored to
   `restored` (forms, evaluated once when the continuation fires).
 
@@ -185,6 +204,25 @@
                                      x#))))]
            (~rebind (fn [] (~k v#))))))))
 
+(defn- restoring-continuation [binding-sym var-syms restored k frame scoped]
+  (if (empty? scoped)
+    (legacy-restoring-continuation binding-sym var-syms restored k)
+    (let [values (mapv #(gensym (str (name %) "-restored")) var-syms)
+          pairs (map vector var-syms values)
+          managed (filter #(contains? scoped (first %)) pairs)
+          ordinary (remove #(contains? scoped (first %)) pairs)
+          value (gensym "value")
+          resume `(fn [~value]
+                    (~binding-sym [~@(mapcat identity managed)
+                                   is.simm.partial-cps.runtime/*scope-frame* ~frame]
+                                  (~k ~value)))]
+      `(fn [~value]
+         (let [~@(interleave values restored)]
+           (~(if (seq ordinary)
+               (legacy-restoring-continuation binding-sym (map first ordinary) (map second ordinary) resume)
+               resume)
+            ~value))))))
+
 (defn handle-binding-form
   "Handle binding/with-redefs forms to restore bindings in continuations.
 
@@ -206,6 +244,12 @@
         ;; the values the form binds, evaluated once before it is entered
         ;; (as `binding` evaluates every init before pushing any)
         entered-syms (map #(gensym (str (name %) "-entered__")) var-syms)
+        scoped (into {} (keep (fn [v]
+                                (when-let [adapter (get @binding-scopes (var-name env v))]
+                                  [v adapter])) var-syms))
+        frame (gensym "scope-frame")
+        descriptors (into {} (map (fn [[v adapter]]
+                                    [(list 'quote (var-name env v)) (scope-descriptor v adapter)]) scoped))
         ;; what each var is restored to (see `register-binding-restorer!`)
         restored (map (fn [var-sym saved entered]
                         (if-let [restorer (get @binding-restorers (var-name env var-sym))]
@@ -223,18 +267,23 @@
       ;; restore outer binding values.
       `(let [~@(interleave saved-syms var-syms)
              ~@(interleave entered-syms (map second binding-pairs))
+             ~@(when (seq scoped)
+                 [frame `(merge is.simm.partial-cps.runtime/*scope-frame* ~descriptors)])
              ;; Wrapped resolve/reject - restore the outer bindings for the
              ;; rest of the computation, see `restoring-continuation`
-             ~wrapped-r ~(restoring-continuation binding-sym var-syms restored r)
-             ~wrapped-e ~(restoring-continuation binding-sym var-syms restored e)]
+             ~wrapped-r ~(restoring-continuation binding-sym var-syms restored r frame scoped)
+             ~wrapped-e ~(restoring-continuation binding-sym var-syms restored e frame scoped)]
          ;; Establish bindings for sync execution, CPS-transform just the body
          ;; Use invert-impl (not invert) to preserve the expansion-cache and
          ;; breakpoint-cache across binding form boundaries. Each DOM element
          ;; macro creates binding forms (with-parent-addr, with-slot), and
          ;; resetting the cache at each level caused exponential re-expansion.
          (~macro-sym [~@(interleave var-syms entered-syms)]
-                     ~(invert-impl (assoc ctx :r wrapped-r :e wrapped-e)
-                                   `(do ~@body))))
+                     ~(let [body (invert-impl (assoc ctx :r wrapped-r :e wrapped-e)
+                                              `(do ~@body))]
+                        (if (seq scoped)
+                          `(~binding-sym [is.simm.partial-cps.runtime/*scope-frame* ~frame] ~body)
+                          body))))
       ;; No breakpoints in body - just expand normally
       (recur ctx
              (apply (if (:js-globals env)
@@ -490,8 +539,19 @@
       ;; was READ from source; a call produced by another macro has none
       ;; (syntax-quote strips them), never a wrong one. There is no :file:
       ;; a site key needs the namespace as well, or the form itself.
-      (let [handler (resolve (breakpoints (var-name env head)))]
-        (resolve-sequentially ctx (rest form) (handler (assoc ctx :form form) r e)))
+      (let [handler (resolve (breakpoints (var-name env head)))
+            resume (gensym "resume") reject (gensym "reject")]
+        (resolve-sequentially
+         ctx (rest form)
+         (fn [args]
+           (let [;; Function-style handlers opt in to evaluation before scope capture.
+                 ;; Other handlers retain control over their original argument forms.
+                 eager? (::eager-arguments (meta handler))
+                 arguments (if eager? (mapv (fn [_] (gensym "argument")) args) args)]
+             `(let [~@(when eager? (interleave arguments args))
+                    ~resume (is.simm.partial-cps.runtime/scope-continuation ~r)
+                    ~reject (is.simm.partial-cps.runtime/scope-continuation ~e)]
+                ~((handler (assoc ctx :form form) resume reject) arguments))))))
 
       (seq? form)
       (resolve-sequentially ctx form (fn [form] `(~r ~(seq form))))
