@@ -8,20 +8,23 @@
   ((resolve 'cljs.analyzer/resolve-var) env sym))
 
 (defn resolve-macro-var-cljs [env sym]
-  ;; in cljs compilation
+  ;; Use the compiler's actual expander lookup. resolve-macro-var consults
+  ;; analyzer namespace tables which can omit macro-only namespaces (notably
+  ;; under Shadow); get-expander also respects local shadowing and exclusions.
   (require 'cljs.analyzer)
-  ((resolve 'cljs.analyzer/resolve-macro-var) env sym))
+  (when-let [v ((resolve 'cljs.analyzer/get-expander) sym env)]
+    (let [m (meta v)]
+      (assoc m :name (symbol (str (:ns m)) (name (:name m)))))))
 
 (defn var-name [env sym]
   (when (symbol? sym)
     ;; Don't qualify special forms or core symbols that shouldn't be qualified
     (when-not (special-symbol? sym)
       (if (:js-globals env)
-        ;; In ClojureScript use cljs.analyzer — resolve as a var, FALLING BACK to a
-        ;; macro var so a macro-named breakpoint (e.g. `cljs.core/await` on cljs >= 1.12)
-        ;; resolves to its fully-qualified name and can be matched in `breakpoints`.
-        (or (:name (resolve-var-cljs env sym))
-            (:name (resolve-macro-var-cljs env sym)))
+        ;; Macro lookup wins in call position, just as in the cljs compiler.
+        ;; resolve-var may guess a current-namespace var for a macro-only name.
+        (or (:name (resolve-macro-var-cljs env sym))
+            (:name (resolve-var-cljs env sym)))
         ;; In Clojure — use str instead of .getName for SCI namespace compatibility
         (when-let [v (resolve env sym)]
           (let [m (meta v)
@@ -47,6 +50,105 @@
           (when (:macro (meta resolved))
             (let [expanded (apply resolved form env (rest form))]
               [expanded true])))))))
+
+(defn binding-symbols
+  "Names bound by a symbol or a Clojure destructuring form."
+  [binding]
+  (set (take-nth 2 (destructure [binding nil]))))
+
+(defn bind-locals
+  "Extend the compiler environment on either platform."
+  [env syms]
+  (if (:js-globals env)
+    (update env :locals (fnil into {}) (map (fn [s] [s {:name s}])) syms)
+    (into (or env {}) (map (fn [s] [s true])) syms)))
+
+(defn- own-scope? [ctx env sym]
+  (when (symbol? sym)
+    (let [resolved (var-name env sym)
+          macro-info (when (:js-globals env) (resolve-macro-var-cljs env sym))
+          v (if (:js-globals env)
+              (when (:name macro-info) (resolve (:name macro-info)))
+              (resolve env sym))]
+      (or (contains? (:opaque-scopes ctx) resolved)
+          (:partial-cps/scope (meta v))))))
+
+(defn assert-no-bare-breakpoints!
+  "Reject suspension in an opaque closure, including macro-hidden sites.
+  Macros marked :partial-cps/scope (or named in ctx :opaque-scopes) establish
+  their own transform and are not inspected. Local binding and destructuring
+  scope is respected; quotes and method names are never treated as calls."
+  [{:keys [breakpoints env] :as ctx} outer]
+  (letfn [(fail! [f]
+            (let [site (merge (meta outer) (meta f))]
+              (throw (ex-info
+                      (str "Cannot suspend at `" (first f)
+                           "` inside an opaque closure. Use a loop, an explicit "
+                           "asynchronous sequence, or a nested async/spin scope "
+                           "consumed by a CPS-aware caller.")
+                      {:type ::unsupported-suspension
+                       :breakpoint (var-name env (first f))
+                       :form outer :site f :file *file*
+                       :line (:line site) :column (:column site)}))))
+          (scan-bindings [env bindings body]
+            (loop [env env ps (seq (partition 2 bindings))]
+              (if-let [[[b value] & more] ps]
+                (do (scan env value)
+                    (recur (bind-locals env (binding-symbols b)) more))
+                (doseq [f body] (scan env f)))))
+          (scan-fn [env f]
+            (let [tail (rest f)
+                  self (when (symbol? (first tail)) (first tail))
+                  tail (if self (rest tail) tail)
+                  env (if self (bind-locals env [self]) env)
+                  arities (if (vector? (first tail)) [tail] tail)]
+              (doseq [[params & body] arities]
+                (let [env' (bind-locals env (binding-symbols params))]
+                  (doseq [x body] (scan env' x))))))
+          (scan [env f]
+            (cond
+              (seq? f)
+              (let [head (first f)]
+                (cond
+                  (#{'quote 'var} head) nil
+                  (own-scope? ctx env head) nil
+                  (and (symbol? head) (contains? breakpoints (var-name env head))) (fail! f)
+                  :else
+                  (if-let [[expanded _] (expand-macro f env)]
+                    (scan env expanded)
+                    (case head
+                      (fn fn*) (scan-fn env f)
+                      (let* loop*) (scan-bindings env (second f) (nnext f))
+                      letfn* (let [env' (bind-locals env (take-nth 2 (second f)))]
+                               (doseq [x (concat (take-nth 2 (rest (second f))) (nnext f))]
+                                 (scan env' x)))
+                      catch (let [[_ _cls local & body] f
+                                  env' (bind-locals env [local])]
+                              (doseq [x body] (scan env' x)))
+                      case* (if (:js-globals env)
+                              (let [[_ expression _keys values default] f]
+                                (doseq [x (concat [expression default] values)] (scan env x)))
+                              (let [[_ expression _shift _mask default table] f]
+                                (scan env expression)
+                                (scan env default)
+                                (doseq [[_ [_constant expression]] table] (scan env expression))))
+                      (reify* deftype*)
+                      (let [fields (if (= head 'deftype*) (nth f 3) [])
+                            env' (bind-locals env fields)]
+                        (doseq [[_ params & body] (filter seq? (rest f))]
+                          (when (vector? params)
+                            (let [env'' (bind-locals env' (binding-symbols params))]
+                              (doseq [x body] (scan env'' x))))))
+                      . (let [[_ target & members] f]
+                          (scan env target)
+                          (doseq [member members]
+                            (if (seq? member)
+                              (doseq [arg (rest member)] (scan env arg))
+                              (when-not (symbol? member) (scan env member)))))
+                      (doseq [x f] (scan env x))))))
+              (map? f) (doseq [[k v] f] (scan env k) (scan env v))
+              (coll? f) (doseq [x f] (scan env x))))]
+    (scan env outer)))
 
 (defn has-breakpoints?
   [form {:keys [breakpoints recur-target env expansion-cache breakpoint-cache] :as ctx}]
@@ -129,10 +231,7 @@
       (then coll))))
 
 (defn add-env-syms [ctx syms]
-  ;; This adds mappings to "true" into the environment map. This doesn't quite
-  ;; match what the Clojure compiler does, but I think it's already recommended
-  ;; that macros don't depend on the values in the &env map.
-  (update ctx :env (fnil into {}) (map (fn [sym] [sym true])) syms))
+  (update ctx :env bind-locals syms))
 
 (defonce ^{:doc "Macro-time registry: fully qualified var symbol -> restorer and
   optional entry capture symbols. See
@@ -359,8 +458,12 @@
       (or (special-symbol? head) (= head 'let) (= head 'letfn) (= head 'loop) (= head 'fn))
       (case head
 
-        (quote var fn* fn deftype* reify* clojure.core/import*)
+        (quote var clojure.core/import*)
         `(~r ~form)
+
+        (fn* fn deftype* reify*)
+        (do (assert-no-bare-breakpoints! ctx form)
+            `(~r ~form))
 
         if
         (let [[con left right & unexpected-others] tail

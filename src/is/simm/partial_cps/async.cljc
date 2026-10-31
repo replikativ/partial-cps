@@ -111,7 +111,7 @@
    'cljs.core/await `await-handler})
 
 #?(:clj
-   (defmacro async
+   (defmacro ^{:partial-cps/scope true} async
      "Defines a function that takes a successful and exceptional continuation,
    and runs the body, suspending execution whenever any of the breakpoints (await) is
    encountered, and eventually calling one of the continuations with the

@@ -390,6 +390,31 @@ Areas of interest:
 - Documentation and examples
 - Integration with more async libraries
 
+## Suspension boundaries
+
+See [SUSPENSION.md](SUSPENSION.md) for function-scope diagnostics, native
+iteration macros, and explicit asynchronous sequence processing.
+
+## JVM class-file name limit
+
+Large resumable functions can hit `java.io.IOException: File name too long`
+when exporting class files (including AOT compilation). Clojure includes the
+names of enclosing closures in nested closure class names; CPS transformation
+can expose this limit. The threshold depends on nesting, namespace and function
+names, and the filesystem. Successful REPL evaluation does not guarantee that
+class-file export will succeed.
+
+If this occurs, split the function into smaller, separately transformed async
+or spin helpers, composing them through the usual await/effect API. Moving an
+unchanged nested function into another local closure may retain the same naming
+problem; shortening names only postpones it.
+
+This is tracked upstream as [CLJ-1852](https://ask.clojure.org/index.php/3824/clojure-generated-class-names-length-exceed-file-system-limit).
+Clojure maintainers discussed using a fallback naming strategy when the current
+strategy fails, and in April 2024 listed it for consideration in 1.13. This is
+not a released fix or a guaranteed release commitment. We currently use stock
+Clojure and recommend splitting affected functions.
+
 ## License
 
 MIT License
