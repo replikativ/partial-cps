@@ -390,6 +390,11 @@ Areas of interest:
 - Documentation and examples
 - Integration with more async libraries
 
+### Optional CPS collection operations
+
+See [COLLECTIONS.md](COLLECTIONS.md) for optional eager collection lowering,
+compile-time suspension diagnostics, and the explicit lazy compatibility policy.
+
 ## License
 
 MIT License
