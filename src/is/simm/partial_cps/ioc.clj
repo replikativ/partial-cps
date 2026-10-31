@@ -51,13 +51,6 @@
             (let [expanded (apply resolved form env (rest form))]
               [expanded true])))))))
 
-(def ^:dynamic *form-rewriter*
-  "Optional macro-time hook (fn [ctx form] form), also accepted as
-  :form-rewriter in invert's context. Invoked at each transformed expression,
-  including forms introduced by macros. Nil preserves the host language.
-  Hooks must leave unsupported forms intact for the normal CPS diagnostics."
-  nil)
-
 (defn binding-symbols
   "Names bound by a symbol or a Clojure destructuring form."
   [binding]
@@ -91,7 +84,7 @@
               (throw (ex-info
                       (str "Cannot suspend at `" (first f)
                            "` inside an opaque closure. Use a loop, an explicit "
-                           "CPS collection operation, or a nested async/spin scope "
+                           "asynchronous sequence, or a nested async/spin scope "
                            "consumed by a CPS-aware caller.")
                       {:type ::unsupported-suspension
                        :breakpoint (var-name env (first f))
@@ -424,9 +417,7 @@
            expansion-map] ; map of original forms to their expansions
     :as ctx}
    form]
-  (let [form (if-let [rewrite (or (:form-rewriter ctx) *form-rewriter*)]
-               (rewrite ctx form) form)
-        [head & tail] (when (seq? form) form)
+  (let [[head & tail] (when (seq? form) form)
         all-ex (if (:js-globals env) :default `Throwable)]
     (cond
       (not (has-breakpoints? form ctx))

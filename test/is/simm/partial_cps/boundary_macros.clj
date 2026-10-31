@@ -1,12 +1,9 @@
-(ns is.simm.partial-cps.collection-macros
+(ns is.simm.partial-cps.boundary-macros
   (:require [is.simm.partial-cps.async :as a]
             [is.simm.partial-cps.ioc :as ioc]))
 
 (defmacro hidden-await [task]
   (list 'is.simm.partial-cps.async/await task))
-
-(defmacro wrapped-mapv [f xs]
-  (list 'clojure.core/mapv f xs))
 
 (defmacro rejection [form]
   (try
