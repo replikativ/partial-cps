@@ -492,10 +492,10 @@
                 ;; Transform default expression
                 inverted-default (invert-impl ctx default-expr)]
             `(case* ~test-expr ~keys-vec ~inverted-vals ~inverted-default))
-          ;; CLJ format
+          ;; CLJ format: preserve the compiler dispatch table ordering/comparator.
           (let [[ge shift mask default imap & args] tail
                 imap (reduce-kv #(assoc %1 %2 (update %3 1 (fn [v] (invert-impl ctx v))))
-                                {} imap)]
+                                (empty imap) imap)]
             `(case* ~ge ~shift ~mask ~(invert-impl ctx default) ~imap ~@args)))
 
         let*
